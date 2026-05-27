@@ -3,4 +3,6 @@ venv/
 
 requierments.txt
 
+__pycache__
+
 
