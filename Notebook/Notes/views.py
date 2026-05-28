@@ -1,20 +1,15 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.pagination import PageNumberPagination
+from Notes.paginations import NotePagination
 from Notes.models import Note
-from Notes.serializers import NoteSerialisers
+from Notes.serializers import NoteSerialiser
 from Notes.permissions import IsOwner
 
-class NotePagination(PageNumberPagination):
-    page_size = 5
-    page_query_param = 'page_size'
-    max_page_size = 10
-
-
 class NoteListCreateView(generics.ListCreateAPIView):
-    serializer_class = NoteSerialisers
-    permission_classes = [IsAuthenticated, IsOwner]
-    pagination_class = Note
+    serializer_class = NoteSerialiser
+    permission_classes = [IsAuthenticated]
+    pagination_class = NotePagination
+    
     def get_queryset(self):
         return Note.objects.filter(user=self.request.user).order_by('created_at')
     
@@ -22,7 +17,8 @@ class NoteListCreateView(generics.ListCreateAPIView):
         serializer.save(user=self.request.user)
 
 class NoteDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = NoteSerialisers
+    serializer_class = NoteSerialiser
     permission_classes = [IsAuthenticated, IsOwner]   
+    
     def get_queryset(self):
         return Note.objects.filter(user=self.request.user)

@@ -1,6 +1,6 @@
-from django.contrib.auth.models import User
+from User.models import CustomUser as User
 from rest_framework import generics, permissions
-from .serializers import RegisterSerializer
+from User.serializers import RegisterSerializer
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دفترچه یادداشت شخصی</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 600px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; }
+        input, textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 5px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .note-item { border-bottom: 1px solid #eee; padding: 15px 0; display: flex; justify-content: space-between; align-items: center; }
+        .note-content { flex-grow: 1; margin-left: 10px; }
+        .note-actions button { width: auto; padding: 5px 10px; font-size: 14px; margin-right: 5px; }
+        .hidden { display: none; }
+        .error { color: red; text-align: center; margin-top: 10px; }
+        .success { color: green; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- بخش ورود و ثبت نام -->
+    <div id="auth-section">
+        <h2 id="auth-title">🔐 ورود به حساب</h2>
+        <input type="text" id="username" placeholder="نام کاربری">
+        <input type="password" id="password" placeholder="رمز عبور">
+        <input type="email" id="email" placeholder="ایمیل (فقط برای ثبت نام)" class="hidden">
+        
+        <button onclick="handleAuth()" id="auth-btn" class="btn-primary">ورود</button>
+        <button onclick="toggleAuthMode()" class="btn-secondary">📝 ثبت نام / ورود</button>
+        <div id="auth-msg"></div>
+    </div>
+
+    <!-- بخش یادداشت ها -->
+    <div id="notes-section" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>📝 یادداشت‌های من</h2>
+            <button onclick="logout()" class="btn-danger" style="width: auto;">خروج</button>
+        </div>
+
+        <hr>
+        
+        <!-- فرم ایجاد/ویرایش -->
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 id="form-title">➕ یادداشت جدید</h3>
+            <input type="hidden" id="note-id">
+            <input type="text" id="note-title" placeholder="عنوان یادداشت">
+            <textarea id="note-content" rows="3" placeholder="متن یادداشت..."></textarea>
+            
+            <button onclick="saveNote()" id="save-btn" class="btn-primary">💾 ذخیره</button>
+            <button onclick="cancelEdit()" id="cancel-btn" class="btn-secondary hidden">❌ انصراف</button>
+            <div id="note-msg"></div>
+        </div>
+
+        <!-- لیست یادداشت ها -->
+        <div id="notes-list">
+            <p style="text-align: center;">در حال بارگذاری...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_URL = 'http://127.0.0.1:8000'; // آدرس سرور شما
+    let isLoginMode = true;
+    let accessToken = localStorage.getItem('access_token');
+
+    // بررسی وضعیت لاگین هنگام لود صفحه
+    window.onload = function() {
+        if (accessToken) {
+            showNotesSection();
+        } else {
+            showAuthSection();
+        }
+    };
+
+    // تغییر بین حالت ورود و ثبت نام
+    function toggleAuthMode() {
+        isLoginMode = !isLoginMode;
+        const title = document.getElementById('auth-title');
+        const btn = document.getElementById('auth-btn');
+        const emailInput = document.getElementById('email');
+
+        if (isLoginMode) {
+            title.innerText = '🔐 ورود به حساب';
+            btn.innerText = 'ورود';
+            emailInput.classList.add('hidden');
+        } else {
+            title.innerText = '📝 ثبت نام';
+            btn.innerText = 'ثبت نام';
+            emailInput.classList.remove('hidden');
+        }
+        document.getElementById('auth-msg').innerText = '';
+    }
+
+    // مدیریت ورود و ثبت نام
+    async function handleAuth() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const email = document.getElementById('email').value;
+        const msgDiv = document.getElementById('auth-msg');
+
+        if (!username || !password) {
+            msgDiv.innerText = 'لطفاً نام کاربری و رمز عبور را وارد کنید';
+            msgDiv.className = 'error';
+            return;
+        }
+
+        try {
+            let url, body;
+            if (isLoginMode) {
+                url = `${API_URL}/User/token/`;
+                body = JSON.stringify({ username, password });
+            } else {
+                url = `${API_URL}/User/register/`;
+                body = JSON.stringify({ username, email, password });
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: body
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(JSON.stringify(data));
+            }
+
+            if (isLoginMode) {
+                localStorage.setItem('access_token', data.access);
+                accessToken = data.access;
+                showNotesSection();
+            } else {
+                msgDiv.innerText = 'ثبت نام موفقیت آمیز بود! حالا وارد شوید.';
+                msgDiv.className = 'success';
+                toggleAuthMode();
+            }
+        } catch (error) {
+            msgDiv.innerText = 'خطا: ' + error.message;
+            msgDiv.className = 'error';
+        }
+    }
+
+    // نمایش بخش یادداشت ها
+    function showNotesSection() {
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('notes-section').classList.remove('hidden');
+        loadNotes();
+    }
+
+    // نمایش بخش ورود
+    function showAuthSection() {
+        document.getElementById('auth-section').classList.remove('hidden');
+        document.getElementById('notes-section').classList.add('hidden');
+    }
+
+    // خروج از حساب
+    function logout() {
+        localStorage.removeItem('access_token');
+        accessToken = null;
+        showAuthSection();
+    }
+
+    // دریافت لیست یادداشت ها
+    async function loadNotes() {
+        const listDiv = document.getElementById('notes-list');
+        try {
+            const response = await fetch(`${API_URL}/Notes/notes/`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            
+            if (!response.ok) throw new Error('خطا در دریافت اطلاعات');
+            
+            const data = await response.json();
+            const notes = data.results || data; // پشتیبانی از Pagination
+
+            listDiv.innerHTML = '';
+            if (notes.length === 0) {
+                listDiv.innerHTML = '<p style="text-align:center">هنوز یادداشتی ندارید.</p>';
+                return;
+            }
+
+            notes.forEach(note => {
+                const div = document.createElement('div');
+                div.className = 'note-item';
+                // نکته مهم: استفاده از تابع startEdit برای دکمه ویرایش
+                div.innerHTML = `
+                    <div class="note-content">
+                        <strong>${note.title}</strong><br>
+                        <small style="color:#666">${note.content.substring(0, 50)}...</small>
+                    </div>
+                    <div class="note-actions">
+                        <button class="btn-warning" onclick="startEdit(${note.id}, '${note.title.replace(/'/g, "\\'")}', '${note.content.replace(/'/g, "\\'")}')">✏️ ویرایش</button>
+                        <button class="btn-danger" onclick="deleteNote(${note.id})">🗑️ حذف</button>
+                    </div>
+                `;
+                listDiv.appendChild(div);
+            });
+        } catch (error) {
+            listDiv.innerHTML = `<p class="error">${error.message}</p>`;
+        }
+    }
+
+    // شروع حالت ویرایش (این تابع باعث واکنش دکمه می‌شود)
+    function startEdit(id, title, content) {
+        document.getElementById('note-id').value = id;
+        document.getElementById('note-title').value = title;
+        document.getElementById('note-content').value = content;
+        
+        document.getElementById('form-title').innerText = '✏️ ویرایش یادداشت';
+        document.getElementById('save-btn').innerText = '✅ آپدیت';
+        document.getElementById('cancel-btn').classList.remove('hidden');
+        
+        // اسکرول به بالا برای دیدن فرم
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // انصراف از ویرایش
+    function cancelEdit() {
+        document.getElementById('note-id').value = '';
+        document.getElementById('note-title').value = '';
+        document.getElementById('note-content').value = '';
+        
+        document.getElementById('form-title').innerText = '➕ یادداشت جدید';
+        document.getElementById('save-btn').innerText = '💾 ذخیره';
+        document.getElementById('cancel-btn').classList.add('hidden');
+        document.getElementById('note-msg').innerText = '';
+    }
+
+    // ذخیره یا آپدیت یادداشت
+    async function saveNote() {
+        const id = document.getElementById('note-id').value;
+        const title = document.getElementById('note-title').value;
+        const content = document.getElementById('note-content').value;
+        const msgDiv = document.getElementById('note-msg');
+
+        if (!title || !content) {
+            msgDiv.innerText = 'عنوان و متن الزامی است';
+            msgDiv.className = 'error';
+            return;
+        }
+
+        try {
+            let url, method;
+            if (id) {
+                // حالت ویرایش
+                url = `${API_URL}/Notes/notes/${id}/`;
+                method = 'PUT';
+            } else {
+                // حالت ایجاد جدید
+                url = `${API_URL}/Notes/notes/`;
+                method = 'POST';
+            }
+
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({ title, content })
+            });
+
+            if (!response.ok) throw new Error('خطا در ذخیره سازی');
+
+            cancelEdit();
+            msgDiv.innerText = id ? 'یادداشت ویرایش شد' : 'یادداشت ایجاد شد';
+            msgDiv.className = 'success';
+            loadNotes(); // رفرش لیست
+
+        } catch (error) {
+            msgDiv.innerText = error.message;
+            msgDiv.className = 'error';
+        }
+    }
+
+    // حذف یادداشت
+    async function deleteNote(id) {
+        if (!confirm('آیا مطمئن هستید؟')) return;
+        
+        try {
+            const response = await fetch(`${API_URL}/Notes/notes/${id}/`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            if (!response.ok) throw new Error('خطا در حذف');
+            
+            loadNotes();
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+</script>
+
+</body>
+</html>
